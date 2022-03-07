@@ -3,6 +3,14 @@ Python client for Stevens Connect cloud data acquisition system
 
 API methods for retrieving station metadata and data to pandas DataFrames
 
+## Installation
+
+    pip install git+https://github.com/rhkarls/stevens-connect-client
+	
+or
+
+Place \stevensconnectclient\stevensconnectclient.py in `PYTHONPATH`
+
 Requires:
     `python >= 3.8`
     `requests`

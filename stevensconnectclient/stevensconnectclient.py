@@ -331,7 +331,7 @@ class StevensConnectSession:
             "range_type": "absolute",
             "start_date": start_datetime,
             "end_date": end_datetime,
-            "user_time": "",
+            "user_timezone": "null",
             "minutes": "null",
             "page": 1,
         }
@@ -353,7 +353,6 @@ class StevensConnectSession:
             
             # change channel_id and user_time in get_data
             get_data["channel_ids"] = str(channel_id)
-            get_data["user_time"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
            
             # set page to 1
             get_data["page"] = 1

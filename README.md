@@ -1,5 +1,5 @@
 # stevens-connect-client
-Python client for Stevens Connect cloud data acquisition system
+Python API client for Stevens-Connect cloud data acquisition system
 
 API methods for retrieving station metadata and data to pandas DataFrames
 

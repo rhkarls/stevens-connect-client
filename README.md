@@ -12,7 +12,8 @@ or
 Place \stevensconnectclient\stevensconnectclient.py in `PYTHONPATH`
 
 Requires:
-    `python >= 3.8`
+
+    `python >= 3.10`
     `requests`
     `pandas`
     `tqdm`
@@ -37,14 +38,14 @@ scs.get_station_sensor_channels(station_id)
 
 # get data as DataFrame for given station_id, sensor_id or channel_id
 data = scs.get_data_station(station_id,
-                            start_date='2021-01-01 15:00',
-                            end_date='2021-02-01 00:00')
+                            start_datetime='2021-01-01 15:00',
+                            end_datetime='2021-02-01 00:00')
 data = scs.get_data_sensor(sensor_id,
-                           start_date='2021-01-01 15:00',
-                           end_date='2021-02-01 00:00')
+                           start_datetime='2021-01-01 15:00',
+                           end_datetime='2021-02-01 00:00')
 data = scs.get_data_channels([channel_a, channel_b],
-                             start_date='2021-01-01 15:00',
-                             end_date='2021-02-01 00:00')
+                             start_datetime='2021-01-01 15:00',
+                             end_datetime='2021-02-01 00:00')
 
 # clean data. removing duplicated timestamps,
 # check if numeric, sorting by date and time
@@ -72,3 +73,11 @@ See doc strings for methods for more details
 `get_latest_datapoint_channel`: Get the timestamp of the latest datapoint on a given channel.
 
 `clean_data`: Static method. Basic sanitation and check of data.
+
+`campbell_post_dataframe`: Convenience method for posting data from a pandas DataFrame to Stevens Connect Campbell logger station.
+
+`campbell_post_string`: Post data to Stevens Connect Campbell logger station.
+
+`campbell_create_sensor_parameter`: Create a new sensor parameter (aka channel) for a Campbell logger station. Not yet implemented.
+
+`campbell_delete_sensor_parameter`: Delete a sensor parameter (aka channel) from a Campbell logger station. Not yet implemented.

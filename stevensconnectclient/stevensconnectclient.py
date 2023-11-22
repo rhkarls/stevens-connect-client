@@ -4,13 +4,13 @@ Stevens Connect API methods for retrieving data
 Uses readings API version 3
 
 Requires:
-    python >=3.8
+    python >=3.9
     requests
     pandas
     tqdm
     
 License: MIT
-Copyright (c) 2021 Reinert Huseby Karlsen
+Copyright (c) 2021-2023 Reinert Huseby Karlsen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,7 @@ SOFTWARE.
 import datetime as dt
 import itertools
 import re
+from time import sleep
 
 import requests
 import pandas as pd
@@ -92,6 +93,7 @@ class StevensConnectSession:
     API_URL_AUTH = "https://api.stevens-connect.com/authenticate"
     API_URL_PROJECT = "http://api.stevens-connect.com/project"
     API_URL_CONFIGPACKET = "https://api.stevens-connect.com/config-packet"
+    API_URL_CAMPBELL_POST = "https://api.stevens-connect.com/incoming/campbell/v1"
 
     def __init__(self, username, password):
         """Authenticate with username and password to Stevens Connect"""
@@ -116,12 +118,7 @@ class StevensConnectSession:
 
     def _get_projects(self):
         """Creates a dictionary with project ids and names"""
-        projects = {}
-
-        for project in self.cp_projects:
-            projects[project["id"]] = project["name"]
-
-        return projects
+        return {project["id"]: project["name"] for project in self.cp_projects}
 
     def _config_packet_to_df(self):
         """Normalizes the json config-packet to a pandas DataFrame"""
@@ -212,6 +209,10 @@ class StevensConnectSession:
         """Get timezone name of station"""
 
         return self.get_stations().loc[station_id, "timezone_name"]
+
+    def get_unit_ids(self):
+        """Returns the unit ids and names as found in the config-packet"""
+        return self.cp_units
 
     def get_stations(self):
         """Returns a dataframe with available stations"""
@@ -337,7 +338,7 @@ class StevensConnectSession:
         }
 
         data_chs = pd.DataFrame()
-        
+
         # Read single channel at the time and concat to data_chs DataFrame
         for channel_id in tqdm(channel_ids, desc="Channels", unit="channel"):
             try:
@@ -350,13 +351,13 @@ class StevensConnectSession:
             API_URL_READINGS = (
                 self.API_URL_PROJECT + f"/{project_id}/readings/v3/channels"
             )
-            
+
             # change channel_id and user_time in get_data
             get_data["channel_ids"] = str(channel_id)
-           
+
             # set page to 1
             get_data["page"] = 1
-            
+
             # get readings
             r_readings = requests.get(
                 API_URL_READINGS, params=get_data, headers=self.header_api_auth
@@ -403,7 +404,7 @@ class StevensConnectSession:
 
             tz_n = {
                 1: "UTC",
-                2: "LOCAL_TIME",  # TODO can we get the timezone from query param?
+                2: "LOCAL_TIME",
                 3: self._get_station_tz(
                     self.channel_data.loc[channel_id, "station_id"]
                 ),
@@ -412,10 +413,12 @@ class StevensConnectSession:
             # Author has noticed issues with the time conversion, print warning if
             # setting is different that station time (id 3)
             if self.timezone_pref_id in [1, 2]:
-                tqdm.write('WARN: Timezone setting of user is UTC or Local time. '
-                    'The API has previously had issues converting timestamps '
-                    'correctly, please check the returned timestamps for correctness.')
-            
+                tqdm.write(
+                    "WARN: Timezone setting of user is UTC or Local time. "
+                    "The API has previously had issues converting timestamps "
+                    "correctly, please check the returned timestamps for correctness."
+                )
+
             data_ch.index.name = data_ch.index.name + "_" + tz_n[self.timezone_pref_id]
 
             if label_names:
@@ -423,10 +426,10 @@ class StevensConnectSession:
                     channel_id,
                     ["station_name", "sensor_name", "channel_name", "channel_unit_str"],
                 ].tolist()
-                
+
                 label_l.insert(0, str(channel_id))
                 reading_label = "_".join(label_l)
-                
+
                 # replace certain characters
                 reading_label = (
                     reading_label.replace(" ", "_")
@@ -436,10 +439,10 @@ class StevensConnectSession:
                     .replace("²", "2")
                     .replace("³", "3")
                 )
-                
+
                 # remove all special characters (degree symbol, superscripts)
-                reading_label = re.sub(r'\W+', '', reading_label)
-                
+                reading_label = re.sub(r"\W+", "", reading_label)
+
                 reading_label = self._remove_repeated_chars(reading_label, ["_"])
             else:
                 reading_label = str(channel_id)
@@ -455,12 +458,12 @@ class StevensConnectSession:
 
             try:
                 data_chs = data_chs.join(data_ch, on=data_ch.index.name, how="outer")
-            except KeyError:
+            except KeyError as e:
                 raise ValueError(
                     f"Cannot join channels with different timestamp timezone. "
                     f"Channel id {channel_id} index name {data_ch.index.name}. "
                     f"Previous channels have {data_chs.index.name}."
-                )
+                ) from e
 
         # If later channels have additional data timestamps these are not joined
         # properly, and therefore get NaT in index and wrong name on index
@@ -523,7 +526,6 @@ class StevensConnectSession:
             DataFrame with result of the query.
 
         """
-
         channel_ids = self.channel_data.loc[
             self.channel_data.station_id == station_id
         ].index.tolist()
@@ -593,8 +595,9 @@ class StevensConnectSession:
 
         return data_sensor
 
-    def get_latest_datapoint_channel(self, channel_id,
-                                     start_datetime=None, end_datetime=None):
+    def get_latest_datapoint_channel(
+        self, channel_id, start_datetime=None, end_datetime=None
+    ):
         """
         Get the timestamp of the latest datapoint on a given channel_id, searching
         in window between start_datetime and end_datetime.
@@ -620,22 +623,21 @@ class StevensConnectSession:
         String datetime of the latest datapoint for channel, formatted as %Y-%m-%d %H:%M".
 
         """
-        
         if start_datetime is None:
-            start_datetime = ((dt.datetime.now() - dt.timedelta(days=90))
-                              .strftime("%Y-%m-%d %H:%M"))
+            start_datetime = (dt.datetime.now() - dt.timedelta(days=90)).strftime(
+                "%Y-%m-%d %H:%M"
+            )
         if end_datetime is None:
             end_datetime = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 
         qd = self.get_data_channels(channel_id, start_datetime, end_datetime)
-        
+
         try:
-            last_dt_str = qd.index.max().strftime("%Y-%m-%d %H:%M")
-            return last_dt_str
+            return qd.index.max().strftime("%Y-%m-%d %H:%M")
         except AttributeError:
-            print('No datetime index returned from query.')
+            print("No datetime index returned from query.")
             return
-            
+
     @staticmethod
     def clean_data(input_data):
         """
@@ -664,7 +666,6 @@ class StevensConnectSession:
             Cleaned data.
 
         """
-
         clean_data = input_data.copy()
 
         # Drop rows with NaT on index
@@ -672,7 +673,7 @@ class StevensConnectSession:
             clean_data = clean_data.loc[clean_data.index.notna()]
 
         # HINT not tested for alternative types to datetime64
-        if not input_data.index.inferred_type == "datetime64":
+        if input_data.index.inferred_type != "datetime64":
             raise NotImplementedError(
                 "Data index is not all dates. Solution not yet implemented"
             )
@@ -703,17 +704,263 @@ class StevensConnectSession:
         duplicated_index = input_data.index.duplicated()
 
         if duplicated_index.sum() > 0:
-            df_nd = input_data.loc[~input_data.index.duplicated(keep="first")]
-            return df_nd
+            return input_data.loc[~input_data.index.duplicated(keep="first")]
         else:
             return input_data.copy()
 
     def _remove_repeated_chars(self, in_str, char_list):
-        output = "".join(
+        return "".join(
             k if k in char_list else "".join(v) for k, v in itertools.groupby(in_str)
         )
 
-        return output
+    def campbell_post_dataframe(
+        self,
+        df: pd.DataFrame,
+        sui: str,
+        latitude: float = 0,
+        longitude: float = 0,
+        altitude: float = 0,
+        on_error: str = "raise",
+        chunk_size: int = 1000,
+        sleep_time: int = 10,
+        float_format: dict | None = None,
+    ) -> None:
+        """Convenience method for posting data from a pandas DataFrame to Stevens Connect Campbell logger.
+        Large dataframes are chunked and posted in chunks, with a sleep interval inbetween.
+
+        Important notes regarding the format of the pandas DataFrame:
+        - The index column must be a datetime dtype
+        - The column dtypes must be numeric (but can contain missing values)
+        - The column order must be the same as the order of the incoming parameters configured in Stevens Connect
+
+        It is recommended to pass a float formatting string for the data columns of floating point type, using the
+        `float_format` keyword argument. This will ensure that the data is formatted correctly when posted to Stevens
+        Connect. The `float_format` keyword argument should be a dictionary with column names as keys and formatting
+        strings as values. For example, if the column `temperature` should be formatted with 3 decimals, the
+        `float_format` dictionary should be passed as `float_format={'temperature': '.3f'}`.
+
+        Refer to the official documentation for further details:
+        https://support.stevens-connect.com/station-setup-by-type/campbell-setup/campbell-datalogger-setup/
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The pandas DataFrame containing the data to be posted. See important notes above regarding the format.
+        sui : str
+            The Stevens Connect SUI (station unique identifier).
+        latitude : float, optional
+            Latitude of the station. Note: unclear from the official documentation if this is required or not,
+            or if it even has an effect, by default 0
+        longitude : float, optional
+            Longitude of the station. Note: unclear from the official documentation if this is required or not,
+             or if it even has an effect, by default 0
+        altitude : float, optional
+            Altitude of the station. Note: unclear from the official documentation if this is required or not,
+            or if it even has an effect, by default 0
+        on_error : str, optional
+            Behaviour on APIError exception, by default 'raise'
+        chunk_size : int, optional
+            The size, in rows, to chunk the posting of the DataFram by, by default 1000
+        sleep_time : int, optional
+            Sleep time, in seconds, between each post request, by default 10
+        float_format : dict | None, optional
+            A dictionary with column names as keys and formatting strings as values. For example, for column
+            `temperature` to be formatted with 3 decimals, {'temperature': '.3f'}, by default None
+        """
+        list_df_data = [df[i : i + chunk_size] for i in range(0, len(df), chunk_size)]
+        report_timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fixed_header = self._campbell_create_data_header(
+            sui=sui,
+            report_timestamp=report_timestamp,
+            record_number=0,
+            latitude=latitude,
+            longitude=longitude,
+            altitude=altitude,
+        )
+
+        for i, df_n in tqdm(enumerate(list_df_data)):
+            if i > 0:
+                sleep(sleep_time)
+
+            post_data = fixed_header
+
+            for df_i, df_row in df_n.iterrows():
+                record_timestamp = df_i.strftime("%Y-%m-%d %H:%M:%S")
+                record_line_strs = [record_timestamp]
+                for column_name in df_n.columns:
+                    if float_format is not None:
+                        column_float_format = float_format.get(column_name, None)
+                    else:
+                        column_float_format = None
+
+                    if pd.isna(df_row[column_name]):
+                        record_value = "NAN"
+                    elif column_float_format is not None:
+                        record_value = f"{df_row[column_name]:{column_float_format}}"
+                    else:
+                        record_value = f"{df_row[column_name]}"
+
+                    record_line_strs.append(record_value)
+
+                record_line = ",".join(record_line_strs)
+                record_line += chr(13) + chr(10)
+
+                post_data += record_line
+
+            self.campbell_post_string(post_data, on_error=on_error)
+
+    def campbell_post_string(self, post_data: str, on_error: str = "raise"):
+        """
+        Post data to Stevens Connect Campbell logger station.
+
+        Refer to the official documentation for further details:
+        https://support.stevens-connect.com/station-setup-by-type/campbell-setup/campbell-datalogger-setup/
+
+        Parameters
+        ----------
+        post_data : str
+            The data string to be posted, see official Stevens Connect documention for details.
+        on_error : str, optional
+            Behaviour on APIError exception, by default 'raise'
+
+        Returns
+        -------
+        The response from the API
+
+        Raises
+        ------
+        APIError, if on_error is set to 'raise' and the API returns an error (i.e. status code not equal to 200)
+        """
+        http_header = {}
+        r = requests.post(
+            self.API_URL_CAMPBELL_POST, data=post_data, headers=http_header
+        )
+        if r.status_code != 200 and on_error == "raise":
+            raise APIError(r.status_code, r.content)
+        else:
+            return r
+
+    def campbell_create_sensor_parameter(
+        self,
+        project_id: int,
+        station_id: int,
+        sensor_id: int,
+        name: str,
+        scale: int | float,
+        offset: int | float,
+        unit_id: int,
+        code: int,
+        status: int,
+    ):
+        """Create a new sensor parameter (aka channel) for a given project, station and sensor id.
+
+        Refer to the official documentation for further details:
+        https://support.stevens-connect.com/api-documentation/campbell-stations/#creating-a-sensor-parameter
+
+        Parameters
+        ----------
+        project_id : int
+            Stevens Connect project id, obtained from the config packet or using methods of this package
+            get_stations.
+        station_id : int
+            Stevens Connect station id, obtained from the config packet or using methods of this package
+            get_stations.
+        sensor_id : int
+            Stevens Connect sensor id, obtained from the config packet or using methods of this package
+            get_all_channels or get_station_sensor_channels.
+        name : str
+            Name of the new sensor parameter (aka channel) in Stevens connect.
+        scale : int | float
+            Scaling of incoming data, i.e. the value of the incoming data is multiplied by this value. Set
+            to 1 for no scaling.
+        offset : int | float
+            Offset of incoming data, i.e. the value of the incoming data is added by this value. Set to 0
+            for no offset.
+        unit_id : int
+            Number that corresponds with the desired unit's id which can be found in the Configuration Packet.
+            Also see method get_unit_ids.
+        code : int
+            Number that should be set based on the order that it will be listed in the reporting response object.
+            The first parameter's code should be set to 0 and subsequent code's should increment e.g. 1,2,3...
+        status : int
+            Can be set to 0 or 1 and controls whether the parameter is active or inactive
+        """
+        ...
+
+    def campbell_delete_sensor_parameter(
+        self, project_id: int, station_id: int, sensor_id: int, channel_id: int
+    ):
+        """Delete a sensor parameter (aka channel) for a given project, station, sensor and channel id.
+
+        This cannot be undone!
+
+        Refer to the official documentation for further details:
+        https://support.stevens-connect.com/api-documentation/campbell-stations/#deleting-a-sensor-parameter
+
+        Parameters
+        ----------
+        project_id : int
+            Stevens Connect project id, obtained from the config packet or using methods of this package
+            get_stations.
+        station_id : int
+            Stevens Connect station id, obtained from the config packet or using methods of this package
+            get_stations.
+        sensor_id : int
+            Stevens Connect sensor id, obtained from the config packet or using methods of this package
+            get_all_channels or get_station_sensor_channels.
+        channel_id : int
+            Stevens Connect channel id, obtained from the config packet or using methods of this package
+            get_all_channels, get_station_sensor_channels, or get_sensor_channels.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def _campbell_create_data_header(
+        sui: str,
+        report_timestamp: str,
+        record_number: int,
+        latitude: float,
+        longitude: float,
+        altitude: float,
+    ):
+        """Creates a header string for the data to be posted to Stevens Connect.
+
+        Refer to the official documentation for further details:
+        https://support.stevens-connect.com/station-setup-by-type/campbell-setup/campbell-datalogger-setup/
+
+        Parameters
+        ----------
+        sui : str
+            _description_
+        report_timestamp : str
+            The timestamp of the report, format YYYY-MM-DD HH:MM:SS. If using strftime: strftime('%Y-%m-%d %H:%M:%S')
+        record_number : int
+            Note: unclear from the official documentation if this is required or not, or if it even has an effect.
+        latitude : float
+            Note: unclear from the official documentation if this is required or not, or if it even has an effect.
+        longitude : float
+            Note: unclear from the official documentation if this is required or not, or if it even has an effect.
+        altitude : float
+            Note: unclear from the official documentation if this is required or not, or if it even has an effect.
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+        # report_timestamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data_header_strs = [
+            sui,
+            report_timestamp,
+            str(record_number),
+            str(latitude),
+            str(longitude),
+            str(altitude),
+        ]
+        data_header = ",".join(data_header_strs)
+        data_header += chr(13) + chr(10)
+
+        return data_header
 
 
 class AuthenticationError(Exception):
@@ -728,7 +975,6 @@ class AuthenticationError(Exception):
     """
 
     def __init__(self, status_code, message):
-
         message_string = message.get("errors", {}).get("email", "Unknown Error")
 
         self.status_code = status_code
@@ -751,7 +997,6 @@ class APIError(AuthenticationError):
     """
 
     def __init__(self, status_code, message):
-
         message_string = message.get("message", "Unknown error")
 
         self.status_code = status_code

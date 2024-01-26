@@ -13,10 +13,10 @@ Place \stevensconnectclient\stevensconnectclient.py in `PYTHONPATH`
 
 Requires:
 
-    `python >= 3.10`
-    `requests`
-    `pandas`
-    `tqdm`
+    python >= 3.10
+    requests
+    pandas
+    tqdm
 
 ## Example usage
 
@@ -77,6 +77,8 @@ See doc strings for methods for more details
 `campbell_post_dataframe`: Convenience method for posting data from a pandas DataFrame to Stevens Connect Campbell logger station.
 
 `campbell_post_string`: Post data to Stevens Connect Campbell logger station.
+
+### Under development
 
 `campbell_create_sensor_parameter`: Create a new sensor parameter (aka channel) for a Campbell logger station. Not yet implemented.
 

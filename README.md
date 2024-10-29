@@ -20,6 +20,9 @@ Requires:
 
 ## Example usage
 
+> [!CAUTION]
+> It is not recommended to hard code credentials, as in the simplified example. Instead, use for example environmental 
+> variables or .env files .
 
 ```python
 from stevensconnectclient import StevensConnectSession

@@ -4,13 +4,13 @@ Stevens Connect API methods for retrieving data
 Uses readings API version 3
 
 Requires:
-    python >=3.9
+    python >=3.10
     requests
     pandas
     tqdm
     
 License: MIT
-Copyright (c) 2021-2023 Reinert Huseby Karlsen
+Copyright (c) 2021-2024 Reinert Huseby Karlsen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

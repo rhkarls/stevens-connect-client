@@ -91,7 +91,7 @@ class StevensConnectSession:
     """
 
     API_URL_AUTH = "https://api.stevens-connect.com/authenticate"
-    API_URL_PROJECT = "http://api.stevens-connect.com/project"
+    API_URL_PROJECT = "https://api.stevens-connect.com/project"
     API_URL_CONFIGPACKET = "https://api.stevens-connect.com/config-packet"
     API_URL_CAMPBELL_POST = "https://api.stevens-connect.com/incoming/campbell/v1"
 
@@ -646,7 +646,7 @@ class StevensConnectSession:
         The following checks and adjustments are made:
         - Check if index is all dates: Throws exception if not
         - Check if data is numeric: Converts to numeric if not
-        - Drops duplicate indicies
+        - Drops duplicate indices
         - Sorts data by index
 
 
@@ -690,7 +690,7 @@ class StevensConnectSession:
         # convert to numeric data if dtypes are not numeric
         if not data_is_numeric:
             clean_data = pd.to_numeric(clean_data, errors="coerce")
-        # drop duplicate indicies
+        # drop duplicate indices
         clean_data = StevensConnectSession._drop_duplicates(clean_data)
 
         # sort by index
@@ -700,7 +700,7 @@ class StevensConnectSession:
 
     @staticmethod
     def _drop_duplicates(input_data):
-        """Drop duplicated indicies from dataframe or series"""
+        """Drop duplicated indices from dataframe or series"""
         duplicated_index = input_data.index.duplicated()
 
         if duplicated_index.sum() > 0:
@@ -760,7 +760,7 @@ class StevensConnectSession:
         on_error : str, optional
             Behaviour on APIError exception, by default 'raise'
         chunk_size : int, optional
-            The size, in rows, to chunk the posting of the DataFram by, by default 1000
+            The size, in rows, to chunk the posting of the DataFrame by, by default 1000
         sleep_time : int, optional
             Sleep time, in seconds, between each post request, by default 10
         float_format : dict | None, optional
@@ -819,7 +819,7 @@ class StevensConnectSession:
         Parameters
         ----------
         post_data : str
-            The data string to be posted, see official Stevens Connect documention for details.
+            The data string to be posted, see official Stevens Connect documentation for details.
         on_error : str, optional
             Behaviour on APIError exception, by default 'raise'
 

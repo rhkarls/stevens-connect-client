@@ -8,7 +8,7 @@ Requires:
     requests
     pandas
     tqdm
-    
+
 License: MIT
 Copyright (c) 2021-2024 Reinert Huseby Karlsen
 
@@ -36,8 +36,8 @@ import itertools
 import re
 from time import sleep
 
-import requests
 import pandas as pd
+import requests
 from tqdm import tqdm
 
 
